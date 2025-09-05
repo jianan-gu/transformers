@@ -2403,7 +2403,12 @@ class GenerationMixin:
                 should_convert_cache = True
             if should_convert_cache:
                 result.past_key_values = result.past_key_values.to_legacy_cache()
-        if self.config.no_token_latency:
+        no_token_latency = (
+            self.config.no_token_latency 
+            if hasattr(self.config, "no_token_latency") 
+            else False
+        )
+        if no_token_latency:
             return result
         else:
             return result, latency_list
