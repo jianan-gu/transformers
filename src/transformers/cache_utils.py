@@ -2153,12 +2153,21 @@ class PagedAttentionCache(Cache):
             self.value_cache.append(torch.zeros(1, KV_H, max_cached_seq_len, V_D, device=device, dtype=dtype))
             self.batch_reserve(self.paged_attentions[i], torch.tensor([max_cache_len for _ in range(batch_size)]))
 
+        def generate_causal_offset(offset: torch.Tensor):
+            def causal_offset_mask(b, h, q_idx, kv_idx):
+                return (offset + q_idx) >= kv_idx
+
+            return causal_offset_mask
+
         self.batch_size = batch_size
         self.max_cache_len = max_cache_len
         self.block_masks = []
-        block_mask = create_block_mask(noop_mask, batch_size, 1, 1, max_cache_len, device=device, BLOCK_SIZE=page_size)
         for i in range(max_cache_len):
-            self.block_masks.append(self.paged_attentions[0].convert_logical_block_mask(block_mask, kv_len=torch.tensor([i]*batch_size)))
+            mod = generate_causal_offset(
+                torch.tensor(i, device=device, dtype=torch.int32)
+            )
+            block_mask = create_block_mask(mod, batch_size, 1, 1, max_cache_len, device=device, BLOCK_SIZE=page_size)
+            self.block_masks.append(self.paged_attentions[0].convert_logical_block_mask(block_mask))
         self.score_mods = []
         self.score_mods.append(None)
         self.score_mods.append(None)
